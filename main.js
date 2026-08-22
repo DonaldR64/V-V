@@ -7,6 +7,7 @@ const Main = (() => {
 
     let HexSize, HexInfo, DIRECTIONS;
     let MapInfo = {};
+    let UnitArray = {};
 
     //math constants
     const M = {
@@ -72,8 +73,6 @@ const Main = (() => {
         }
     }
 
-    let UnitArray = {};
-
     let outputCard = {title: "",subtitle: "",side: "",body: [],buttons: [],};
 
     const Nations = {
@@ -104,6 +103,10 @@ const Main = (() => {
             "borderStyle": "5px ridge",  
         },
     };
+
+
+
+
 
 
     const SM = {
@@ -678,24 +681,24 @@ const Main = (() => {
     const AddAbilities = (msg) => {
         if (!msg.selected) {return};
         let id = msg.selected[0]._id;
-        let ship = ShipArray[id];  
-        if (!ship) {
-            ship = new Ship(id);
+        let unit = UnitArray[id];  
+        if (!unit) {
+            unit = new Unit(id);
         }
-        AddAbilities2(ship)
+        AddAbilities2(unit)
     }
         
-    const AddAbilities2 = (ship) => {
+    const AddAbilities2 = (unit) => {
         let abilityName,action;
-        let abilArray = findObjs({_type: "ability", _characterid: ship.charID});
+        let abilArray = findObjs({_type: "ability", _characterid: unit.charID});
         //clear old abilities
         for(let a=0;a<abilArray.length;a++) {
             abilArray[a].remove();
         } 
         //Weapons
         let macros = {};
-        for (let w=0;w<ship.weaponArray.length;w++) {
-            let weapon = ship.weaponArray[w];
+        for (let w=0;w<unit.weaponArray.length;w++) {
+            let weapon = unit.weaponArray[w];
             let type;
             if (Projectiles.includes(weapon.type)) {
                 type = weapon.name + " " + weapon.type;
@@ -718,20 +721,20 @@ const Main = (() => {
             if (keys[i].includes("Photon")) {
                 action += ";" + "?{Mode|Single|Spread [3]}";
             }
-            AddAbility(abilityName,action,ship.charID);
+            AddAbility(abilityName,action,unit.charID);
         }
 
 
-        if (Attribute(ship.charID,"cloak",true) === "1") {
+        if (Attribute(unit.charID,"cloak",true) === "1") {
             action = "!Orders;@{selected|token_id};Cloak/Decloak";
-            AddAbility("Cloak/Decloak",action,ship.charID);
+            AddAbility("Cloak/Decloak",action,unit.charID);
         }
 
         action = "!Warp;@{selected|token_id}";
-        AddAbility("Warp",action,ship.charID);
+        AddAbility("Warp",action,unit.charID);
 
         action = "!CheckLOS;@{selected|token_id};@{target|token_id}";
-        AddAbility("Scan Ship",action,ship.charID);
+        AddAbility("Scan Unit",action,unit.charID);
 
 
 
@@ -985,16 +988,25 @@ const Main = (() => {
             }
         }
         //AddTerrain();    
-        //AddTokens();
+        AddTokens();
         DefineMap();
-log(MapInfo);
         let elapsed = Date.now()-startTime;
         log("Hex Map Built in " + elapsed/1000 + " seconds");
     };
 
+    const DefineMap = () => {
+        let map = findObjs({_type: "graphic",_subtype: "token",layer: "map"}).filter((e) => e.get("name").includes("Map"))[0];
+        let w = map.get("width")/2;
+        let h = map.get("height")/2;
+        let x = map.get("left");
+        let y = map.get("top");
+        MapInfo.top = new Point(x-w,y-h);
+        MapInfo.bottom = new Point(x+w,y+h);
+        MapInfo.centre = new Point(x,y);
+    }
      
     const AddTokens = () => {
-        ShipArray = {};
+        UnitArray = {};
         //create an array of all tokens
         let start = Date.now();
         let tokens = findObjs({
@@ -1010,12 +1022,12 @@ log(MapInfo);
         tokens.forEach((token) => {
             let character = getObj("character", token.get("represents"));   
             if (character) {
-                let ship = new Ship(token.get("id"));
+                let unit = new Unit(token.get("id"));
             }
         });
 
         let elapsed = Date.now()-start;
-        log(`${c} token${s} checked in ${elapsed/1000} seconds - ` + Object.keys(ShipArray).length + " placed in Ship Array");
+        log(`${c} token${s} checked in ${elapsed/1000} seconds - ` + Object.keys(UnitArray).length + " placed in Unit Array");
 
     }
 
@@ -1113,47 +1125,22 @@ log(MapInfo);
 
 
 
-    const DefineMap = () => {
-        let map = findObjs({
-            _pageid: Campaign().get("playerpageid"),
-            _type: "graphic",
-            _subtype: "token",
-            layer: "map",
-            name: "Map",
-        })[0];
-        let w = map.get("width")/2;
-        let h = map.get("height")/2;
-        let x = map.get("left");
-        let y = map.get("top");
-        MapInfo.top = new Point(x-w,y-h);
-        MapInfo.bottom = new Point(x+w,y+h);
-        MapInfo.centre = new Point(x,y);
-    }
-
-
-
-
-
-
 
 
 
     const TokenInfo = (msg) => {
-        let Tag = msg.content.split(";");
-        let id = Tag[1];
-        let ship = ShipArray[id];
-        if (!ship) {
+        let id = msg.selected[0]._id;
+        let unit = UnitArray[id];
+        if (!unit) {
             sendChat("","Not in Array");
             return;
         };
-        let label = ship.hexLabel;
+        let label = unit.hexLabel;
         let hex = HexMap[label];
-        SetupCard(ship.name,"Info",ship.nation);
+        SetupCard(unit.name,"Info",unit.nation);
         outputCard.body.push("Hex Label: " + label);
-        outputCard.body.push("X: " + hex.centre.x + " Y: " + hex.centre.y);
-        outputCard.body.push("Row: " + hex.offset.row + " Column: " + hex.offset.col);
-        if (ship.Offmap()) {
-            outputCard.body.push("Ship is Off Map");
+        if (unit.Offmap()) {
+            outputCard.body.push("Unit is Off Map");
         }
 
 
@@ -1167,7 +1154,7 @@ log(MapInfo);
         PlaySound("Dice");
         let roll = randomInteger(6);
         let playerID = msg.playerid;
-        let id,ship,player;
+        let id,unit,player;
         if (msg.selected) {
             id = msg.selected[0]._id;
         }
@@ -1177,13 +1164,13 @@ log(MapInfo);
             return;
         }
         if (id) {
-            ship = ShipArray[id];
-            if (ship) {
-                nation = ship.nation;
-                player = ship.player;
+            unit = UnitArray[id];
+            if (unit) {
+                nation = unit.nation;
+                player = unit.player;
             }
         }
-        if ((!id || !ship) && playerID) {
+        if ((!id || !unit) && playerID) {
             nation = state.Valor.players[playerID];
             player = (state.Valor.nations[0] === nation) ? 0:1;
         }
@@ -1206,17 +1193,15 @@ log(MapInfo);
     const ClearState = (msg) => {
         let Tag = msg.content.split(";");
         LoadPage();
-        RemoveWaypoints();
 
         //RemoveDead();
 
         BuildMap();
 
         //clear arrays
-        ShipArray = {};
+        UnitArray = {};
 
         state.Valor = {
-            playerIDs: [],
             players: {},
             nations: [],
             turn: 0,
@@ -1262,8 +1247,8 @@ log(MapInfo);
 
     const CheckLOS = (msg) => {
         let Tag = msg.content.split(";");
-        let shooter = ShipArray[Tag[1]];
-        let target = ShipArray[Tag[2]];
+        let shooter = UnitArray[Tag[1]];
+        let target = UnitArray[Tag[2]];
 
         if (!shooter) {
             sendChat("","Not valid shooter");
@@ -1291,7 +1276,7 @@ log(MapInfo);
             if (target.token.get("tint_color") === "#000000") {
                 losResult.distance *= 2;
                 outputCard.body.push("[Effective Distance: " + (losResult.distance) + "]");
-                outputCard.body.push("Ship is Cloaked");
+                outputCard.body.push("Unit is Cloaked");
             }
             outputCard.body.push("[hr]");
             outputCard.body.push("[U]Weapons Solutions[/u]");
@@ -1324,7 +1309,7 @@ log(MapInfo);
                     let number = weaponTypes[type];
                     let verb = (number === 1) ? " has ":" have ";
                     let s = (number === 1) ? "":"s";
-                    outputCard.body.push(number + " " + type + s + " can target the ship");
+                    outputCard.body.push(number + " " + type + s + " can target the unit");
                 }
             }
             outputCard.body.push("[hr]");
@@ -1431,20 +1416,20 @@ log(MapInfo);
 
 
     const changeGraphic = (tok,prev) => {
-        let ship = ShipArray[tok.id];
+        let unit = UnitArray[tok.id];
         let newLabel = new Point(tok.get("left"),tok.get("top")).toCube().label();
         let prevLabel = new Point(prev.left,prev.top).toCube().label();
-        if (ship && newLabel !== prevLabel) {
-            log(ship.name + " moving")
+        if (unit && newLabel !== prevLabel) {
+            log(unit.name + " moving")
             let index = HexMap[prevLabel].tokenIDs.indexOf(tok.id);
             if (index > -1) {
                 HexMap[prevLabel].tokenIDs.splice(index,1);
             }
             HexMap[newLabel].tokenIDs.push(tok.id);
-            ship.hexLabel = newLabel;
+            unit.hexLabel = newLabel;
         } 
-        if (ship && tok.get("rotation") !== prev.rotation) {
-            log(ship.name + " turning")
+        if (unit && tok.get("rotation") !== prev.rotation) {
+            log(unit.name + " turning")
             let phi = Angle(tok.get("rotation"));
             phi = Math.round(phi/30) * 30;
             tok.set("rotation",phi);
@@ -1454,14 +1439,14 @@ log(MapInfo);
     const destroyGraphic = (obj) => {
         let id = obj.get("id");
         if (id) {
-            let ship = ShipArray[id];
-            if (ship) {
-                log(ship.name + " removed from Ship Array")
-                let index = HexMap[ship.hexLabel].tokenIDs.indexOf(id);
+            let unit = UnitArray[id];
+            if (unit) {
+                log(unit.name + " removed from Unit Array")
+                let index = HexMap[unit.hexLabel].tokenIDs.indexOf(id);
                 if (index > -1) {
-                    HexMap[ship.hexLabel].tokenIDs.splice(index,1);
+                    HexMap[unit.hexLabel].tokenIDs.splice(index,1);
                 }
-                delete ShipArray[id];
+                delete UnitArray[id];
             }
         }
     }
@@ -1483,8 +1468,8 @@ log(MapInfo);
                 log(HexMap)
                 log("State");
                 log(state.Valor);
-                log("Ship");
-                log(ShipArray)
+                log("Unit");
+                log(UnitArray)
                 break;
             case '!ClearState':
                 ClearState(msg);
@@ -1557,7 +1542,6 @@ log(MapInfo);
         //on("add:graphic", addGraphic);
         on('change:graphic',changeGraphic);
         on('destroy:graphic',destroyGraphic);
-        on('change:campaign:turnorder',Combat);
     };
     on('ready', () => {
         log("===>Valor & Victory<===");
